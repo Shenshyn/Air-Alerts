@@ -1,0 +1,7 @@
+- [x] Create `src/features.py` with sweep-line concurrency, local-timezone temporal features, and data-leakage-free spatial encoding
+- [x] Refactor `src/data_loader.py` to keep right-censored data (`event = 0`), compute censor time, and modularize functions
+- [x] Refactor `src/model_cox.py` to use `src/features.py` and implement clean, modular structure
+- [x] Refactor `src/model_xgb.py` to use `src/features.py`, fix target formatting for censored data, and add a validation split for early stopping
+- [x] Refactor `src/evaluate.py` to use `src/features.py`, add MAE/RMSE metrics, and add scenario parameter validation
+- [x] Run the complete pipeline and verify performance metrics and plots
+- [x] Commit and push all code changes to GitHub repository
