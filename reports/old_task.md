@@ -1,0 +1,9 @@
+- [x] git: Initialize repository and set up remote `https://github.com/Shenshyn/Air-Alerts.git`
+- [x] env: Create `requirements.txt`
+- [x] data: Implement `data_loader.py` to clean, deduplicate, and cache oblast-level alerts
+- [x] baseline: Implement `baseline_km.py` for Kaplan-Meier survival analysis and plotting
+- [x] cox: Implement `model_cox.py` for Cox Proportional Hazards modeling
+- [x] xgboost: Implement `model_xgb.py` for XGBoost Survival modeling (AFT/Cox)
+- [x] evaluate: Implement `evaluate.py` to calculate Concordance Index (C-index) and plot comparison curves
+- [x] git: Commit all files and push to remote
+- [x] verify: Create `walkthrough.md` with comparison results
