@@ -4,6 +4,9 @@
 
 # Air Alerts Survival Analysis
 
+> [!NOTE]
+> This project was developed as part of the selection process for the **KSE AI Agentic Summer School: Stage 2**.
+
 This project performs survival analysis on Ukrainian air alert data to predict alert durations and understand the risk factors (like region, time of day, and concurrency). 
 It employs Baseline Kaplan-Meier Estimators, Cox Proportional Hazards Models, and XGBoost Survival Models to estimate the duration of air alerts.
 
@@ -29,42 +32,45 @@ During the development and analysis, we encountered several critical data challe
 
 ### 4. "Naive" Censoring Artifacts
 **Problem**: Some active alerts at the time of data export were naively censored by setting their `ended_at` to the export date (e.g., June 2026), creating artificially massive durations.
-**Solution**: We strictly calculated durations from `started_at` and `finished_at` and dropped null durations. Any unrealistic durations were handled appropriately, maintaining the integrity of our survival modelling.
+**Solution**: We strictly calculated durations from `started_at` and `finished_at`. Active/ongoing alerts without a finished time are properly modeled as right-censored observations (`event = 0`) with their duration computed up to the dataset's latest censor cutoff.
 
 ## Methodology
 
 ### Feature Engineering
 - **Concurrency**: The number of other active oblast-level alerts at the exact instant the current alert started. This was implemented efficiently in $O(N \log N)$ time using a sweep-line algorithm.
-- **Temporal Features**: Cyclic encoding (sine and cosine transformations) of the hour, day of the week, and month to capture seasonality and time-of-day effects.
-- **Spatial Features**: One-hot encoded oblasts to capture regional risk baselines.
+- **Temporal Features**: Convert UTC timestamps to Ukraine local time (`Europe/Kyiv`). Continuous fractional hours are calculated ($\text{hour} + \frac{\text{minute}}{60} + \frac{\text{second}}{3600}$) rather than raw integer hours to ensure smooth cyclic encoding (sine/cosine) and avoid artificial step-functions.
+- **Spatial Features**: One-hot encoded oblasts. To prevent data leakage, categories are learned strictly from the training split and mapped onto validation and test sets (representing unseen categories as all-zeros).
 
 ### Models
 1. **Kaplan-Meier Baseline**: Provides a non-parametric estimation of survival probabilities per region.
 2. **Cox Proportional Hazards**: A semi-parametric model to evaluate the impact of our engineered features (hazard ratios).
-3. **XGBoost Survival**: A gradient-boosted tree approach optimized with the `survival:cox` objective function to capture non-linear interactions.
+3. **XGBoost Survival**: A gradient-boosted tree approach optimized with the `survival:cox` objective function to capture non-linear interactions. It utilizes early stopping on a validation set and formats censored targets with negative durations as required by XGBoost.
 
 ## Model Performance
 
-The models were evaluated using the Concordance Index (C-index), which measures the model's ability to correctly rank survival times.
+The models were evaluated on the stratified chronological test set (13,036 alerts across all regions) using the Concordance Index (C-index) for ranking and MAE/RMSE (in minutes) for absolute expected duration:
 
-| Model | Test C-index |
-| --- | --- |
-| **XGBoost (survival:cox)** | ~ 0.6524 |
-| **Cox Proportional Hazards** | ~ 0.6382 |
-| **Kaplan-Meier (Regional Baseline)** | ~ 0.62 |
+| Model | Test C-index | MAE (min) | RMSE (min) |
+| :--- | :---: | :---: | :---: |
+| **XGBoost Survival (Cox)** | **0.6397** | 84.11 | 152.56 |
+| **Cox Proportional Hazards** | 0.6365 | **83.62** | **149.39** |
+| **Regional Kaplan-Meier Baseline** | 0.5515 | 86.78 | 163.35 |
 
-*Note: A C-index of 0.5 is random guessing, and 1.0 is perfect ranking. Given the highly stochastic nature of air alerts, a C-index of ~0.65 indicates a strong predictive signal over the baseline.*
+*Note: A C-index of 0.5 is random guessing, and 1.0 is perfect ranking. Given the highly stochastic nature of air alerts, a C-index of ~0.64 indicates a strong predictive signal over the baseline.*
 
 ## Project Structure
-- `src/data_loader.py`: Cleans data, removes duplicates, filters oblasts, calculates durations, and caches processed data.
-- `src/baseline_km.py`: Fits Kaplan-Meier survival curves for key regions.
+- `src/data_loader.py`: Cleans data, removes duplicates, filters oblasts, calculates durations, handles right-censorship, and caches processed data.
+- `src/features.py`: Centralized feature engineering including concurrency, continuous temporal encoding, spatial encoding, and stratified splitting.
 - `src/model_cox.py`: Trains the Cox PH model and extracts feature importance.
-- `src/model_xgb.py`: Trains the XGBoost survival model.
-- `src/evaluate.py`: Compares models using a stratified chronological split and generates performance plots.
+- `src/model_xgb.py`: Trains the XGBoost survival model with validation early stopping.
+- `src/evaluate.py`: Compares models using a stratified chronological split and generates performance plots and expected survival metrics.
 - `plots/`: Contains generated visualizations (survival curves, model comparisons).
 
 ## Running the Code
 
-1. Ensure you have the required libraries installed: `pandas`, `numpy`, `lifelines`, `xgboost`, `matplotlib`, `seaborn`.
-2. Process the data: `python3 src/data_loader.py`
-3. Run the evaluation pipeline: `python3 src/evaluate.py`
+1. Ensure you have the required libraries installed: `pandas`, `numpy`, `lifelines`, `xgboost`, `matplotlib`, `scipy`.
+2. Process the data: `python src/data_loader.py`
+3. Run the evaluation pipeline (which also triggers model training):
+   - First train Cox: `python src/model_cox.py`
+   - Next train XGBoost: `python src/model_xgb.py`
+   - Finally evaluate: `python src/evaluate.py`
